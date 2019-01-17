@@ -4,6 +4,7 @@ Language Features:
 
 
 Compiler Features:
+ * ABI Decoder: The experimental decoder to raise an error on dirty inputs.
  * Function calls with named arguments now work with overloaded functions.
  * Inline Assembly: Issue error when using ``callvalue()`` inside nonpayable function (in the same way that ``msg.value`` already does).
  * SMTChecker: Show callstack together with model if applicable.
