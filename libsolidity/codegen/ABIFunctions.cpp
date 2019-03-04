@@ -286,26 +286,9 @@ string ABIFunctions::cleanupFunction(Type const& _type)
 			if (type.numBits() == 256)
 				templ("body", "cleaned := value");
 			else if (type.isSigned())
-			{
-				Whiskers w("if iszero(eq(value, signextend(<signbit>, value))) { <failure> } cleaned := value");
-				w("signbit", to_string(type.numBits() / 8 - 1));
-				if (_revertOnFailure)
-					w("failure", "revert(0, 0)");
-				else
-					w("failure", "invalid()");
-				templ("body", w.render());
-			}
+				templ("body", "cleaned := signextend(" + to_string(type.numBits() / 8 - 1) + ", value)");
 			else
-			{
-				u256 mask = (u256(1) << type.numBits()) - 1;
-				Whiskers w("if gt(value, <mask>) { <failure> } cleaned := value");
-				w("mask", toCompactHexWithPrefix(mask));
-				if (_revertOnFailure)
-					w("failure", "revert(0, 0)");
-				else
-					w("failure", "invalid()");
-				templ("body", w.render());
-			}
+				templ("body", "cleaned := and(value, " + toCompactHexWithPrefix((u256(1) << type.numBits()) - 1) + ")");
 			break;
 		}
 		case Type::Category::RationalNumber:
@@ -334,14 +317,8 @@ string ABIFunctions::cleanupFunction(Type const& _type)
 			else
 			{
 				size_t numBits = type.numBytes() * 8;
-				u256 mask = ~(((u256(1) << numBits) - 1) << (256 - numBits));
-				Whiskers w("if and(value, <mask>) { <failure> } cleaned := value");
-				w("mask", toCompactHexWithPrefix(mask));
-				if (_revertOnFailure)
-					w("failure", "revert(0, 0)");
-				else
-					w("failure", "invalid()");
-				templ("body", w.render());
+				u256 mask = ((u256(1) << numBits) - 1) << (256 - numBits);
+				templ("body", "cleaned := and(value, " + toCompactHexWithPrefix(mask) + ")");
 			}
 			break;
 		}
@@ -384,64 +361,22 @@ string ABIFunctions::validatorFunction(Type const& _type, bool _revertOnFailure)
 		switch (_type.category())
 		{
 		case Type::Category::Address:
-			templ("body", "cleaned := " + validatorFunction(IntegerType(160), _revertOnFailure) + "(value)");
-			break;
 		case Type::Category::Integer:
-		{
-			IntegerType const& type = dynamic_cast<IntegerType const&>(_type);
-			if (type.numBits() == 256)
-				templ("body", "cleaned := value");
-			else if (type.isSigned())
-				templ("body", "cleaned := signextend(" + to_string(type.numBits() / 8 - 1) + ", value)");
-			else
-				templ("body", "cleaned := and(value, " + toCompactHexWithPrefix((u256(1) << type.numBits()) - 1) + ")");
-			break;
-		}
 		case Type::Category::RationalNumber:
-			// FIXME: implement this validation
-			templ("body", "cleaned := value");
-			break;
 		case Type::Category::Bool:
+		case Type::Category::FixedPoint:
+		case Type::Category::Array:
+		case Type::Category::Struct:
+		case Type::Category::FixedBytes:
+		case Type::Category::Contract:
 		{
-			Whiskers w("if gt(value, 1) { <failure> } cleaned := value");
+			Whiskers w("cleaned := <cleanup>(value) if iszero(eq(cleaned, value)) { <failure> }");
+			w("cleanup", cleanupFunction(_type));
 			if (_revertOnFailure)
 				w("failure", "revert(0, 0)");
 			else
 				w("failure", "invalid()");
 			templ("body", w.render());
-			break;
-		}
-		case Type::Category::FixedPoint:
-			solUnimplemented("Fixed point types not implemented.");
-			break;
-		case Type::Category::Array:
-		case Type::Category::Struct:
-			solAssert(_type.dataStoredIn(DataLocation::Storage), "Cleanup requested for non-storage reference type.");
-			templ("body", "cleaned := value");
-			break;
-		case Type::Category::FixedBytes:
-		{
-			FixedBytesType const& type = dynamic_cast<FixedBytesType const&>(_type);
-			if (type.numBytes() == 32)
-				templ("body", "cleaned := value");
-			else if (type.numBytes() == 0)
-				// This is disallowed in the type system.
-				solAssert(false, "");
-			else
-			{
-				size_t numBits = type.numBytes() * 8;
-				u256 mask = ((u256(1) << numBits) - 1) << (256 - numBits);
-				templ("body", "cleaned := and(value, " + toCompactHexWithPrefix(mask) + ")");
-			}
-			break;
-		}
-		case Type::Category::Contract:
-		{
-			AddressType addressType(dynamic_cast<ContractType const&>(_type).isPayable() ?
-				StateMutability::Payable :
-				StateMutability::NonPayable
-			);
-			templ("body", "cleaned := " + validatorFunction(addressType, _revertOnFailure) + "(value)");
 			break;
 		}
 		case Type::Category::Enum:
