@@ -658,6 +658,9 @@ Json::Value StandardCompiler::compileSolidity(StandardCompiler::InputsAndSetting
 	compilerStack.useMetadataLiteralSources(_inputsAndSettings.metadataLiteralSources);
 	compilerStack.setRequestedContractNames(requestedContractNames(_inputsAndSettings.outputSelection));
 
+	if (isArtifactRequested(_inputsAndSettings.outputSelection, "ir"))
+		compilerStack.enableIRGeneration();
+
 	Json::Value errors = std::move(_inputsAndSettings.errors);
 
 	bool const binariesRequested = isBinaryRequested(_inputsAndSettings.outputSelection);
