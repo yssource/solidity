@@ -6,6 +6,7 @@ Language Features:
 Compiler Features:
  * Inline Assembly: Issue error when using ``callvalue()`` inside nonpayable function (in the same way that ``msg.value`` already does).
  * Optimizer: Add rule for shifts by constants larger than 255 for Constantinople.
+ * Optimizer: Add rule to simplify certain ANDs and SHL combinations
  * SMTChecker: Show callstack together with model if applicable.
  * Yul Optimizer: Enable stack allocation optimization by default if yul optimizer is active (disable in yulDetails).
 
