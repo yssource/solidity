@@ -1160,6 +1160,39 @@ BOOST_AUTO_TEST_CASE(cse_sub_zero)
 	});
 }
 
+BOOST_AUTO_TEST_CASE(cse_remove_redundant_shift_masking)
+{
+	if (!dev::test::Options::get().evmVersion().hasBitwiseShifting())
+		return;
+
+	for (int i = 1; i < 256; i++)
+	{
+		checkCSE({
+				u256(boost::multiprecision::pow(u256(2), i)-1),
+				Instruction::CALLVALUE,
+				u256(256-i),
+				Instruction::SHR,
+				Instruction::AND
+				}, {
+				Instruction::CALLVALUE,
+				u256(256-i),
+				Instruction::SHR,
+				});
+
+		checkCSE({
+				Instruction::CALLVALUE,
+				u256(256-i),
+				Instruction::SHR,
+				u256(boost::multiprecision::pow(u256(2), i)-1),
+				Instruction::AND
+				}, {
+				Instruction::CALLVALUE,
+				u256(256-i),
+				Instruction::SHR,
+				});
+	}
+}
+
 BOOST_AUTO_TEST_CASE(cse_remove_unwanted_masking_of_address)
 {
 	vector<Instruction> ops{

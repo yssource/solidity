@@ -390,6 +390,30 @@ std::vector<SimplificationRule<Pattern>> simplificationRuleListPart7(
 		false
 	});
 
+	rules.push_back({
+		// AND(A, SHR(B, X)) -> SHR(B, X) if 2^B-1 == A
+		{Instruction::AND, {A, {Instruction::SHR, {B, X}}}},
+		[=]() -> Pattern { return {Instruction::SHR, {B, X}}; },
+		false,
+		[=]() {
+			if (B.d() > 256)
+				return false;
+			return (u256(2) << (256 - static_cast<int>(B.d())-1)) - 1 == A.d();
+			}
+	});
+
+	rules.push_back({
+		// AND(SHR(A, X), B) -> SHR(A, X) if 2^B-1 == A
+		{Instruction::AND, {{Instruction::SHR, {A, X}}, B}},
+		[=]() -> Pattern { return {Instruction::SHR, {A, X}}; },
+		false,
+		[=]() {
+			if (A.d() > 256)
+				return false;
+			return (u256(2) << (256 - static_cast<int>(A.d())-1)) - 1 == B.d();
+			}
+	});
+
 	return rules;
 }
 

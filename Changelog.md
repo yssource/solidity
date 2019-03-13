@@ -30,6 +30,7 @@ Compiler Features:
  * Peephole Optimizer: Remove double ``iszero`` before ``jumpi``.
  * SMTChecker: Support enums without typecast.
  * SMTChecker: Support one-dimensional arrays.
+ * Optimizer: Add rule to simplify certain ANDs and SHL combinations
  * Optimizer: Add rule for shifts by constants larger than 255 for Constantinople.
  * Type Checker: Provide better error messages for some literal conversions.
  * Yul Optimizer: Add rule to remove empty default switch cases.
