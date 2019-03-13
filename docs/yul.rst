@@ -15,12 +15,15 @@ It can already be used for "inline assembly" inside Solidity and
 future versions of the Solidity compiler will even use Yul as intermediate
 language. It should also be easy to build high-level optimizer stages for Yul.
 
-.. note::
+.. warning::
 
-    Note that the flavour used for "inline assembly" does not have types
+    Yul does not yet support types
     (everything is ``u256``) and the built-in functions are identical
-    to the EVM opcodes. Please resort to the inline assembly documentation
+    to the EVM opcodes. Refer to the :ref:`inline assembly documentation <inline-assembly>`
     for details.
+
+    You can try the command line interface by adding the ``--strict-assembly``
+    and ``--optimize`` when using ``solc``.
 
 The core components of Yul are functions, blocks, variables, literals,
 for-loops, if-statements, switch-statements, expressions and assignments to variables.
