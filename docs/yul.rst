@@ -9,21 +9,19 @@ Yul
 Yul (previously also called JULIA or IULIA) is an intermediate language that can
 compile to various different backends
 (EVM 1.0, EVM 1.5 and eWASM are planned).
-Because of that, it is designed to be a usable common denominator of all three
+Because of this, it is designed to be a usable common denominator of all three
 platforms.
 It can already be used for "inline assembly" inside Solidity and
-future versions of the Solidity compiler will even use Yul as intermediate
+future versions of the Solidity compiler will use Yul as intermediate
 language. It should also be easy to build high-level optimizer stages for Yul.
+
+Yul is implemented when using the compiler in strict assembly mode, which you can use
+by adding the ``--strict-assembly`` and ``--optimize`` arguments when using ``solc``.
 
 .. warning::
 
-    Yul does not yet support types
-    (everything is ``u256``) and the built-in functions are identical
-    to the EVM opcodes. Refer to the :ref:`inline assembly documentation <inline-assembly>`
-    for details.
-
-    You can try the command line interface by adding the ``--strict-assembly``
-    and ``--optimize`` when using ``solc``.
+    Yul is in active development, and as such does not yet support types (everything is ``u256``),
+    and the built-in functions are identical to the EVM opcodes. Refer to the :ref:`inline assembly documentation <inline-assembly>` for details.
 
 The core components of Yul are functions, blocks, variables, literals,
 for-loops, if-statements, switch-statements, expressions and assignments to variables.
