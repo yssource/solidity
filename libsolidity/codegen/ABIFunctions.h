@@ -235,6 +235,9 @@ private:
 	/// Part of @a abiDecodingFunction for array types.
 	std::string abiDecodingFunctionFunctionType(FunctionType const& _type, bool _fromMemory, bool _forUseOnStack);
 
+	/// @returns the name of a function that retrieves an element from calldata.
+	std::string calldataAccessFunction(Type const& _type);
+
 	/// @returns the name of a function used during encoding that stores the length
 	/// if the array is dynamically sized (and the options do not request in-place encoding).
 	/// It returns the new encoding position.

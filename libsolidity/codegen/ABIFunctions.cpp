@@ -756,29 +756,31 @@ string ABIFunctions::abiEncodingFunctionSimpleArray(
 
 	solAssert(_from.isDynamicallySized() == _to.isDynamicallySized(), "");
 	solAssert(_from.length() == _to.length(), "");
-	solAssert(_from.dataStoredIn(DataLocation::Memory) || _from.dataStoredIn(DataLocation::Storage), "");
 	solAssert(!_from.isByteArray(), "");
-	solAssert(_from.dataStoredIn(DataLocation::Memory) || _from.baseType()->storageBytes() > 16, "");
+	if (_from.dataStoredIn(DataLocation::Storage))
+		solAssert(_from.baseType()->storageBytes() > 16, "");
 
 	return createFunction(functionName, [&]() {
 		bool dynamic = _to.isDynamicallyEncoded();
 		bool dynamicBase = _to.baseType()->isDynamicallyEncoded();
-		bool inMemory = _from.dataStoredIn(DataLocation::Memory);
 		bool const usesTail = dynamicBase && !_options.dynamicInplace;
+		string elementValues = suffixedVariableNameList("elementValue", 0, numVariablesForType(*_from.baseType()));
 		Whiskers templ(
 			usesTail ?
 			R"(
 				// <readableTypeNameFrom> -> <readableTypeNameTo>
-				function <functionName>(value, pos) <return> {
-					let length := <lengthFun>(value)
+				function <functionName>(value,<maybeLength> pos) <return> {
+					<declareLength>
 					pos := <storeLength>(pos, length)
 					let headStart := pos
 					let tail := add(pos, mul(length, 0x20))
-					let srcPtr := <dataAreaFun>(value)
+					let baseRef := <dataAreaFun>(value)
+					let srcPtr := baseRef
 					for { let i := 0 } lt(i, length) { i := add(i, 1) }
 					{
 						mstore(pos, sub(tail, headStart))
-						tail := <encodeToMemoryFun>(<arrayElementAccess>, tail)
+						let <elementValues> := <arrayElementAccess>
+						tail := <encodeToMemoryFun>(<elementValues>, tail)
 						srcPtr := <nextArrayElement>(srcPtr)
 						pos := add(pos, 0x20)
 					}
@@ -788,13 +790,15 @@ string ABIFunctions::abiEncodingFunctionSimpleArray(
 			)" :
 			R"(
 				// <readableTypeNameFrom> -> <readableTypeNameTo>
-				function <functionName>(value, pos) <return> {
-					let length := <lengthFun>(value)
+				function <functionName>(value,<maybeLength> pos) <return> {
+					<declareLength>
 					pos := <storeLength>(pos, length)
-					let srcPtr := <dataAreaFun>(value)
+					let baseRef := <dataAreaFun>(value)
+					let srcPtr := baseRef
 					for { let i := 0 } lt(i, length) { i := add(i, 1) }
 					{
-						pos := <encodeToMemoryFun>(<arrayElementAccess>, pos)
+						let <elementValues> := <arrayElementAccess>
+						pos := <encodeToMemoryFun>(<elementValues>, pos)
 						srcPtr := <nextArrayElement>(srcPtr)
 					}
 					<assignEnd>
@@ -802,11 +806,22 @@ string ABIFunctions::abiEncodingFunctionSimpleArray(
 			)"
 		);
 		templ("functionName", functionName);
+		templ("elementValues", elementValues);
+		bool lengthAsArgument = _from.dataStoredIn(DataLocation::CallData) && _from.isDynamicallySized();
+		if (lengthAsArgument)
+		{
+			templ("maybeLength", " length,");
+			templ("declareLength", "");
+		}
+		else
+		{
+			templ("maybeLength", "");
+			templ("declareLength", "let length := " + m_utils.arrayLengthFunction(_from) + "(value)");
+		}
 		templ("readableTypeNameFrom", _from.toString(true));
 		templ("readableTypeNameTo", _to.toString(true));
 		templ("return", dynamic ? " -> end " : "");
 		templ("assignEnd", dynamic ? "end := pos" : "");
-		templ("lengthFun", m_utils.arrayLengthFunction(_from));
 		templ("storeLength", arrayStoreLengthForEncodingFunction(_to, _options));
 		templ("dataAreaFun", m_utils.arrayDataAreaFunction(_from));
 
@@ -814,7 +829,23 @@ string ABIFunctions::abiEncodingFunctionSimpleArray(
 		subOptions.encodeFunctionFromStack = false;
 		subOptions.padded = true;
 		templ("encodeToMemoryFun", abiEncodeAndReturnUpdatedPosFunction(*_from.baseType(), *_to.baseType(), subOptions));
-		templ("arrayElementAccess", inMemory ? "mload(srcPtr)" : _from.baseType()->isValueType() ? "sload(srcPtr)" : "srcPtr" );
+		switch (_from.location())
+		{
+			case DataLocation::Memory:
+				templ("arrayElementAccess", "mload(srcPtr)");
+				break;
+			case DataLocation::Storage:
+				if (_from.baseType()->isValueType())
+					templ("arrayElementAccess", "sload(srcPtr)");
+				else
+					templ("arrayElementAccess", "srcPtr");
+				break;
+			case DataLocation::CallData:
+				templ("arrayElementAccess", calldataAccessFunction(*_from.baseType()) + "(baseRef, srcPtr)");
+				break;
+			default:
+				solAssert(false, "");
+		}
 		templ("nextArrayElement", m_utils.nextArrayElementFunction(_from));
 		return templ.render();
 	});
@@ -1073,7 +1104,11 @@ string ABIFunctions::abiEncodingFunctionStruct(
 					break;
 				}
 				case DataLocation::CallData:
-					solUnimplementedAssert(false, "Encoding struct from calldata is not yet supported.");
+				{
+					string sourceOffset = toCompactHexWithPrefix(_from.calldataOffsetOfMember(member.name));
+					members.back()["retrieveValue"] = calldataAccessFunction(*memberTypeFrom) + "(value, add(value, " + sourceOffset + "))";
+					break;
+				}
 				default:
 					solAssert(false, "");
 			}
@@ -1556,6 +1591,85 @@ string ABIFunctions::abiDecodingFunctionFunctionType(FunctionType const& _type, 
 		}
 	});
 }
+
+string ABIFunctions::calldataAccessFunction(Type const& _type)
+{
+	string functionName = "calldata_access_" + _type.identifier();
+	return createFunction(functionName, [&]() {
+		if (_type.isDynamicallyEncoded())
+		{
+			unsigned int baseEncodedSize = _type.calldataEncodedSize();
+			solAssert(baseEncodedSize > 1, "");
+			Whiskers w(R"(
+				function <functionName>(base_ref, ptr) -> <return> {
+					let rel_offset_of_tail := calldataload(ptr)
+					if iszero(slt(rel_offset_of_tail, sub(sub(calldatasize(), base_ref), sub(<neededLength>, 1)))) { revert(0, 0) }
+					value := add(rel_offset_of_tail, base_ref)
+					<handleLength>
+				}
+			)");
+			if (_type.isDynamicallySized())
+			{
+				auto const* arrayType = dynamic_cast<ArrayType const*>(&_type);
+				solAssert(!!arrayType, "");
+				unsigned int calldataStride = arrayType->calldataStride();
+				w("handleLength", Whiskers(R"(
+					length := calldataload(value)
+					value := add(value, 0x20)
+					if gt(length, 0xffffffffffffffff) { revert(0, 0) }
+					if sgt(base_ref, sub(calldatasize(), mul(length, <calldataStride>))) { revert(0, 0) }
+				)")("calldataStride", toCompactHexWithPrefix(calldataStride)).render());
+				w("return", "value, length");
+			}
+			else
+			{
+				w("handleLength", "");
+				w("return", "value");
+			}
+			w("neededLength", toCompactHexWithPrefix(baseEncodedSize));
+			w("functionName", functionName);
+			return w.render();
+		}
+		else if (_type.isValueType())
+		{
+			// TODO: should this use the decoding function instead of cleaning directly?
+			//       What would such a call pass as "end"?
+			string cleanup;
+			if (auto const* functionType = dynamic_cast<FunctionType const*>(&_type))
+			{
+				// Should this be handled by cleanupFunction()?
+				solAssert(functionType->kind() == FunctionType::Kind::External, "");
+				cleanup = cleanupCombinedExternalFunctionIdFunction();
+			}
+			else
+				cleanup = cleanupFunction(_type, true);
+			return Whiskers(R"(
+				function <functionName>(baseRef, ptr) -> value {
+					value := <cleanup>(calldataload(ptr))
+				}
+			)")
+			("functionName", functionName)
+			("cleanup", cleanup)
+			.render();
+		}
+		else
+		{
+			solAssert(
+				_type.category() == Type::Category::Array ||
+				_type.category() == Type::Category::Struct,
+				""
+			);
+			return Whiskers(R"(
+				function <functionName>(baseRef, ptr) -> value {
+					value := ptr
+				}
+			)")
+			("functionName", functionName)
+			.render();
+		}
+	});
+}
+
 
 string ABIFunctions::arrayStoreLengthForEncodingFunction(ArrayType const& _type, EncodingOptions const& _options)
 {
