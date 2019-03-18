@@ -23,6 +23,7 @@
 #include <libsolidity/codegen/ir/IRGenerator.h>
 
 #include <libsolidity/ast/AST.h>
+#include <libsolidity/ast/ASTVisitor.h>
 #include <libsolidity/codegen/ABIFunctions.h>
 
 #include <libyul/AssemblyStack.h>
@@ -38,6 +39,54 @@
 using namespace std;
 using namespace dev;
 using namespace dev::solidity;
+
+class IRGenerator::Dispatch: public ASTConstVisitor
+{
+public:
+	Dispatch(IRGenerator& _generator, std::string& _code):
+		m_generator(_generator),
+		m_code(_code)
+	{}
+	using ASTConstVisitor::visit;
+	bool visit(Block const& _node) override
+	{
+		m_code = m_generator.generate(_node);
+		return false;
+	}
+	bool visit(VariableDeclarationStatement const& _node) override
+	{
+		m_code = m_generator.generate(_node);
+		return false;
+	}
+	bool visit(ExpressionStatement const& _node) override
+	{
+		m_code = m_generator.generate(_node);
+		return false;
+	}
+	bool visit(Assignment const& _node) override
+	{
+		m_code = m_generator.generate(_node);
+		return false;
+	}
+	bool visit(BinaryOperation const& _node) override
+	{
+		m_code = m_generator.generate(_node);
+		return false;
+	}
+	bool visit(Identifier const& _node) override
+	{
+		m_code = m_generator.generate(_node);
+		return false;
+	}
+	bool visitNode(ASTNode const& _node) override
+	{
+		solUnimplemented("Node type " + string(typeid(_node).name()) + " not implemented.");
+		return false;
+	}
+private:
+	IRGenerator& m_generator;
+	std::string& m_code;
+};
 
 string IRGenerator::run(ContractDefinition const& _contract)
 {
@@ -93,7 +142,7 @@ string IRGenerator::generateIRFunction(FunctionDefinition const& _function)
 {
 	string functionName = "fun_" + to_string(_function.id()) + "_" + _function.name();
 	return m_context.functionCollector()->createFunction(functionName, [&]() {
-		Whiskers t("function <functionName>(<params>) <returns> {}");
+		Whiskers t("function <functionName>(<params>) <returns> { <body> }");
 		t("functionName", functionName);
 		string params;
 		for (auto const& varDecl: _function.parameters())
@@ -103,9 +152,100 @@ string IRGenerator::generateIRFunction(FunctionDefinition const& _function)
 		for (auto const& varDecl: _function.returnParameters())
 			retParams += (retParams.empty() ? "" : ", ") + m_context.addLocalVariable(*varDecl);
 		t("returns", retParams.empty() ? "" : " -> " + retParams);
+		t("body", generate(_function.body()));
 		return t.render();
 	});
 }
+
+string IRGenerator::generate(Block const& _block)
+{
+	string code;
+	for (auto const& statement: _block.statements())
+		code += visitGenerate(*statement);
+	return code;
+}
+
+string IRGenerator::generate(VariableDeclarationStatement const& _varDeclStatement)
+{
+	string code;
+	for (auto const& decl: _varDeclStatement.declarations())
+		if (decl)
+			code += " let " + m_context.addLocalVariable(*decl) + "\n";
+	solUnimplementedAssert(_varDeclStatement.declarations().size() == 1, "");
+	if (Expression const* expression = _varDeclStatement.initialValue())
+	{
+		solUnimplementedAssert(*expression->annotation().type == IntegerType::uint256(), "");
+		solUnimplementedAssert(*_varDeclStatement.declarations().front()->type() == IntegerType::uint256(), "");
+		// TODO type conversion
+		// TODO we probably have to break out from inline expressions
+		// at some point, so probably better to design it like that right away
+		code += " := " + visitGenerate(*expression) + "\n";
+	}
+	return code;
+}
+
+string IRGenerator::generate(ExpressionStatement const& _exprStatement)
+{
+	solUnimplementedAssert(*_exprStatement.expression().annotation().type == IntegerType::uint256(), "");
+	return " pop(" + visitGenerate(_exprStatement.expression()) + ")";
+}
+
+string IRGenerator::generate(Assignment const& _assignment)
+{
+	solUnimplementedAssert(_assignment.assignmentOperator() == Token::Assign, "");
+	solUnimplementedAssert(*_assignment.leftHandSide().annotation().type == IntegerType::uint256(), "");
+	solUnimplementedAssert(*_assignment.rightHandSide().annotation().type == IntegerType::uint256(), "");
+
+	// TODO proper lvalue handling
+	auto const& identifier = dynamic_cast<Identifier const&>(_assignment.leftHandSide());
+	string varName = m_context.variableName(dynamic_cast<VariableDeclaration const&>(*identifier.annotation().referencedDeclaration));
+	m_outsourced +=
+		varName +
+		" := " +
+		visitGenerate(_assignment.rightHandSide());
+	return varName;
+}
+
+string IRGenerator::generate(BinaryOperation const& _binOp)
+{
+	solUnimplementedAssert(_binOp.getOperator() == Token::Add, "");
+	solUnimplementedAssert(*_binOp.leftExpression().annotation().type == IntegerType::uint256(), "");
+	solUnimplementedAssert(*_binOp.rightExpression().annotation().type == IntegerType::uint256(), "");
+	// TODO overflow check
+	return
+		" add(" +
+		visitGenerate(_binOp.leftExpression()) +
+		", " +
+		visitGenerate(_binOp.rightExpression()) +
+		")";
+}
+
+string IRGenerator::generate(Identifier const& _identifier)
+{
+	solUnimplementedAssert(*_identifier.annotation().type == IntegerType::uint256(), "");
+	auto const& decl = dynamic_cast<VariableDeclaration const&>(
+		*_identifier.annotation().referencedDeclaration
+	);
+	return m_context.variableName(decl);
+}
+
+string IRGenerator::visitGenerate(ASTNode const& _node)
+{
+	string code;
+	Dispatch dispatch(*this, code);
+	_node.accept(dispatch);
+	if (dynamic_cast<Expression const*>(&_node))
+	{
+		string varName = m_context.newYulVariable();
+		m_outsourced += " let " + varName + " := " + std::move(code) + "\n";
+		code = std::move(varName);
+	}
+	else if (!m_outsourced.empty())
+		code = " " + std::move(m_outsourced) + "\n" + std::move(code) + " ";
+
+	return code;
+}
+
 
 string IRGenerator::constructorCode(FunctionDefinition const& _constructor)
 {
@@ -180,8 +320,10 @@ string IRGenerator::dispatchRoutine(ContractDefinition const& _contract)
 		templ["assignToParams"] = params.empty() ? "" : "let " + params + " := ";
 		templ["assignToRetParams"] = retParams.empty() ? "" : "let " + retParams + " := ";
 
+		cout << "Using function collector " << size_t((void*)m_context.functionCollector().get()) << endl;
 		ABIFunctions abiFunctions(m_evmVersion, m_context.functionCollector());
 		templ["abiDecode"] = abiFunctions.tupleDecoder(type->parameterTypes());
+		cout << "built tuple decoder" << endl;
 		templ["params"] = params;
 		templ["retParams"] = retParams;
 
@@ -190,6 +332,7 @@ string IRGenerator::dispatchRoutine(ContractDefinition const& _contract)
 		templ["allocate"] = m_utils.allocationFunction();
 		// TODO The values should be in reverse!
 		templ["abiEncode"] = abiFunctions.tupleEncoder(type->returnParameterTypes(), type->returnParameterTypes(), false);
+		cout << "built tuple encoder" << endl;
 		templ["comma"] = retParams.empty() ? "" : ", ";
 	}
 	t("cases", functions);

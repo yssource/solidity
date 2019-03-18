@@ -275,6 +275,27 @@ BOOST_AUTO_TEST_CASE(storage_array)
 	)
 }
 
+BOOST_AUTO_TEST_CASE(storage_bool_array)
+{
+	string sourceCode = R"(
+		contract C {
+			bool[3] data;
+			event E(bool[3] a);
+			function f() public {
+				data[0] = false;
+				data[1] = true;
+				data[2] = false;
+				emit E(data);
+			}
+		}
+	)";
+	BOTH_ENCODERS(
+		compileAndRun(sourceCode);
+		callContractFunction("f()");
+		REQUIRE_LOG_DATA(encodeArgs(u256(0), u256(1), u256(0)));
+	)
+}
+
 BOOST_AUTO_TEST_CASE(storage_array_dyn)
 {
 	string sourceCode = R"(

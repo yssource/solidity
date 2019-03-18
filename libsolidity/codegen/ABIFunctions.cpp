@@ -38,6 +38,7 @@ string ABIFunctions::tupleEncoder(
 	bool _encodeAsLibraryTypes
 )
 {
+	cout << "creating in funC " << size_t((void*)m_functionCollector.get()) << endl;
 	EncodingOptions options;
 	options.encodeAsLibraryTypes = _encodeAsLibraryTypes;
 	options.encodeFunctionFromStack = true;

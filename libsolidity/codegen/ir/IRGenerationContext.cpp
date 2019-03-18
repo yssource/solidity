@@ -35,3 +35,17 @@ string IRGenerationContext::addLocalVariable(VariableDeclaration const& _varDecl
 	// TODO find nice unique name
 	return m_localVariables[&_varDecl] = "var_" + _varDecl.name() + "_" + to_string(_varDecl.id());
 }
+
+string IRGenerationContext::variableName(VariableDeclaration const& _varDecl)
+{
+	solAssert(
+		m_localVariables.count(&_varDecl),
+		"Unknown variable: " + _varDecl.name()
+	);
+	return m_localVariables[&_varDecl];
+}
+
+string IRGenerationContext::newYulVariable()
+{
+	return "_" + to_string(++m_varCounter);
+}

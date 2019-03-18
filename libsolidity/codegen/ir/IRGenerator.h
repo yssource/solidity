@@ -49,8 +49,20 @@ public:
 	std::string run(ContractDefinition const& _contract);
 
 private:
+	class Dispatch;
+
 	std::string generateIR(ContractDefinition const& _contract);
 	std::string generateIRFunction(FunctionDefinition const& _function);
+
+	std::string generate(Block const& _block);
+	std::string generate(VariableDeclarationStatement const& _variableDeclaration);
+	std::string generate(ExpressionStatement const& _exprStatement);
+
+	std::string generate(Assignment const& _assignment);
+	std::string generate(BinaryOperation const& _binOp);
+	std::string generate(Identifier const& _identifier);
+
+	std::string visitGenerate(ASTNode const& _node);
 
 	std::string constructorCode(FunctionDefinition const& _constructor);
 	std::string deployCode(ContractDefinition const& _contract);
@@ -68,6 +80,7 @@ private:
 	langutil::EVMVersion const m_evmVersion;
 	OptimiserSettings const m_optimiserSettings;
 
+	std::string m_outsourced;
 	IRGenerationContext m_context;
 	YulUtilFunctions m_utils;
 };

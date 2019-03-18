@@ -209,6 +209,7 @@ string YulUtilFunctions::shiftRightFunction(size_t _numBits)
 	string functionName = "shift_right_" + to_string(_numBits) + "_unsigned";
 	if (m_evmVersion.hasBitwiseShifting())
 	{
+		cout << "creating in funC " << size_t((void*)m_functionCollector.get()) << endl;
 		return m_functionCollector->createFunction(functionName, [&]() {
 			return
 				Whiskers(R"(

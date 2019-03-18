@@ -51,12 +51,15 @@ public:
 	std::shared_ptr<MultiUseYulFunctionCollector> functionCollector() const { return m_functions; }
 
 	std::string addLocalVariable(VariableDeclaration const& _varDecl);
+	std::string variableName(VariableDeclaration const& _varDecl);
+	std::string newYulVariable();
 
 private:
 	langutil::EVMVersion m_evmVersion;
 	OptimiserSettings m_optimiserSettings;
 	std::map<VariableDeclaration const*, std::string> m_localVariables;
 	std::shared_ptr<MultiUseYulFunctionCollector> m_functions;
+	size_t m_varCounter = 0;
 };
 
 }
