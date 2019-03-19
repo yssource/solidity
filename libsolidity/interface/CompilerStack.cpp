@@ -1113,7 +1113,10 @@ bytes CompilerStack::createCBORMetadata(string const& _metadata, bool _experimen
 	encoder.pushBytes("bzzr0", dev::swarmHash(_metadata).asBytes());
 	if (_experimentalMode)
 		encoder.pushBool("experimental", true);
-	encoder.pushBytes("solc", VersionCompactBytes);
+	if (VersionIsRelease)
+		encoder.pushBytes("solc", VersionCompactBytes);
+	else
+		encoder.pushString("solc", VersionStringStrict);
 	return encoder.serialise();
 }
 
