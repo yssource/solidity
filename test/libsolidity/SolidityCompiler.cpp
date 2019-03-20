@@ -31,7 +31,7 @@ namespace solidity
 namespace test
 {
 
-BOOST_FIXTURE_TEST_SUITE(Compiler, AnalysisFramework)
+BOOST_FIXTURE_TEST_SUITE(SolidityCompiler, AnalysisFramework)
 
 BOOST_AUTO_TEST_CASE(does_not_include_creation_time_only_internal_functions)
 {
