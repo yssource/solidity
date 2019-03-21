@@ -370,7 +370,7 @@ void protoConverter::visit(Block const& _x)
 {
 	if (_x.statements_size() > 0)
 	{
-		m_numVarsPerScope.push(0)
+		m_numVarsPerScope.push(0);
 		m_output << "{\n";
 		for (auto const& st: _x.statements())
 			visit(st);
