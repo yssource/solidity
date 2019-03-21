@@ -179,17 +179,15 @@ void protoConverter::visit(BinaryOp const& _x)
 void protoConverter::visit(VarDecl const& _x)
 {
 	m_output << "let x_" << m_numLiveVars << " := ";
+	visit(_x.expr());
 	m_numVarsPerScope.top()++;
 	m_numLiveVars++;
-	visit(_x.expr());
 	m_output << "\n";
 }
 
 void protoConverter::visit(TypedVarDecl const& _x)
 {
 	m_output << "let x_" << m_numLiveVars;
-	m_numVarsPerScope.top()++;
-	m_numLiveVars++;
 	switch (_x.type())
 	{
 		case TypedVarDecl::BOOL:
@@ -248,6 +246,8 @@ void protoConverter::visit(TypedVarDecl const& _x)
 			m_output << " : u256\n";
 			break;
 	}
+	m_numVarsPerScope.top()++;
+	m_numLiveVars++;
 }
 
 void protoConverter::visit(UnaryOp const& _x)
