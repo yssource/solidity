@@ -307,7 +307,7 @@ void protoConverter::visit(StoreFunc const& _x)
 
 void protoConverter::visit(ForStmt const& _x)
 {
-	std::string loopVarName{"i_" + m_numNestedForLoops++};
+	std::string loopVarName("i_" + std::to_string(m_numNestedForLoops++));
 	m_output << "for { let " << loopVarName << " := 0 } "
 		<< "lt(" << loopVarName << ", 0x100) "
 		<< "{ " << loopVarName << " := add(" << loopVarName << ", 0x20) } ";

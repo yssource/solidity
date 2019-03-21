@@ -75,7 +75,7 @@ private:
 	std::ostringstream m_output;
 	std::stack<uint8_t> m_numVarsPerScope;
 	int32_t m_numLiveVars;
-	uint8_t m_numNestedForLoops;
+	int32_t m_numNestedForLoops;
 };
 }
 }
