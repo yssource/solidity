@@ -69,10 +69,10 @@ void protoConverter::visit(Literal const& _x)
 	}
 }
 
-// We only reference x_0...x_9 that are I/O params of hardcoded function "foo"
+// Reference any index in [0, m_numLiveVars-1] or [0, m_numLiveVars)
 void protoConverter::visit(VarRef const& _x)
 {
-	m_output  << "x_" << (static_cast<uint32_t>(_x.varnum()) % 10);
+	m_output  << "x_" << (static_cast<uint32_t>(_x.varnum()) % m_numLiveVars);
 }
 
 void protoConverter::visit(Expression const& _x)
@@ -178,14 +178,18 @@ void protoConverter::visit(BinaryOp const& _x)
 // New var numbering starts from x_10 until x_16
 void protoConverter::visit(VarDecl const& _x)
 {
-	m_output << "let x_" << ((_x.id() % 7) + 10) << " := ";
+	m_output << "let x_" << m_numLiveVars << " := ";
+	m_numVarsPerScope.top()++;
+	m_numLiveVars++;
 	visit(_x.expr());
 	m_output << "\n";
 }
 
 void protoConverter::visit(TypedVarDecl const& _x)
 {
-	m_output << "let x_" << ((_x.id() % 7) + 10);
+	m_output << "let x_" << m_numLiveVars;
+	m_numVarsPerScope.top()++;
+	m_numLiveVars++;
 	switch (_x.type())
 	{
 		case TypedVarDecl::BOOL:
@@ -366,10 +370,13 @@ void protoConverter::visit(Block const& _x)
 {
 	if (_x.statements_size() > 0)
 	{
+		m_numScopedVars.push(0)
 		m_output << "{\n";
 		for (auto const& st: _x.statements())
 			visit(st);
 		m_output << "}\n";
+		m_numLiveVars -= m_numVarsPerScope.top();
+		m_numVarsPerScope.pop();
 	}
 	else
 		m_output << "{}\n";

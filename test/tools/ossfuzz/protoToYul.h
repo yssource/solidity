@@ -32,8 +32,16 @@ namespace yul_fuzzer
 class protoConverter
 {
 public:
-	protoConverter() {}
-	protoConverter(protoConverter const&) {}
+	protoConverter()
+	{
+		m_numLiveVars = 10;
+		m_numVarsPerScope.push(m_numLiveVars);
+	}
+	protoConverter(protoConverter const& _x)
+	{
+		m_numLiveVars = _x.m_numLiveVars;
+		m_numVarsPerScope = _x.m_numVarsPerScope;
+	}
 	~protoConverter() {}
 	std::string functionToString(Function const& _input);
 	std::string protoToYul(uint8_t const* _data, size_t _size);
@@ -62,6 +70,8 @@ private:
 	std::string createAlphaNum(std::string const& _strBytes);
 
 	std::ostringstream m_output;
+	std::stack<uint8_t> m_numVarsPerScope;
+	int32_t m_numLiveVars;
 };
 }
 }
