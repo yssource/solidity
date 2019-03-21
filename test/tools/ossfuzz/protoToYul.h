@@ -37,11 +37,13 @@ public:
 	{
 		m_numLiveVars = 10;
 		m_numVarsPerScope.push(m_numLiveVars);
+		m_numNestedForLoops = 0;
 	}
 	protoConverter(protoConverter const& _x)
 	{
 		m_numLiveVars = _x.m_numLiveVars;
 		m_numVarsPerScope = _x.m_numVarsPerScope;
+		m_numNestedForLoops = _x.m_numNestedForLoops;
 	}
 	~protoConverter() {}
 	std::string functionToString(Function const& _input);
@@ -73,6 +75,7 @@ private:
 	std::ostringstream m_output;
 	std::stack<uint8_t> m_numVarsPerScope;
 	int32_t m_numLiveVars;
+	uint8_t m_numNestedForLoops;
 };
 }
 }
