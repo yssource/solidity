@@ -20,6 +20,7 @@
 #include <string>
 #include <ostream>
 #include <sstream>
+#include <stack>
 
 #include <test/tools/ossfuzz/yulProto.pb.h>
 
